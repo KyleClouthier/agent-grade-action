@@ -60,8 +60,7 @@ runs:
         # The ways in, same rules as the result page.
         ways=$(jq -r '
           .parts as $p |
-          [ (if ($p.protected.sensitiveFiles // 0) > 0 and ($p.protected.decoySite | not) then "\($p.protected.sensitiveFiles) sensitive file(s) public: attack bots ask every site for these" else empty end),
-            (if ($p.protected.scriptSecrets // 0) > 0 then "A secret sits in your public JavaScript" else empty end),
+          [ (if (($p.protected.sensitiveFiles // 0) > 0 and ($p.protected.decoySite | not)) or ($p.protected.scriptSecrets // 0) > 0 then "Critical: something a stranger can copy and use to get in (details only after you prove you own the site)" else empty end),
             (if ($p.protected.forms // 0) > ($p.protected.formsGuarded // 0) then "\(($p.protected.forms) - ($p.protected.formsGuarded // 0)) login or signup form(s) with no bot guard" else empty end),
             (if ($p.agentSafe.hidden // 0) > 0 then "Hidden text on your page gives instructions to AI agents" else empty end),
             ([ $p.protected.headers[]? | select(.ok == false and ((.managed // false) | not)) ] | length) as $m |
