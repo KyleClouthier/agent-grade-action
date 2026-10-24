@@ -3,7 +3,7 @@ on:
   push:
   workflow_dispatch:
 jobs:
-  grade:
+  passes:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,3 +13,17 @@ jobs:
           site: simgen.dev
           min-grade: B
       - run: echo "simgen.dev graded ${{ steps.g.outputs.grade }} (${{ steps.g.outputs.score }}/100)"
+  fails-below-minimum:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: g
+        uses: ./
+        continue-on-error: true
+        with:
+          site: calltheupload.com
+          min-grade: A
+      - name: The check must have failed
+        run: |
+          if [ "${{ steps.g.outcome }}" != "failure" ]; then echo "expected a failure below the minimum"; exit 1; fi
+          echo "Correctly failed: calltheupload.com graded ${{ steps.g.outputs.grade }}, minimum A"
