@@ -4,7 +4,7 @@ A GitHub Action that grades your website after each deploy and fails the build i
 
 [Agent Grade](https://simgen.dev/agent-grade/) scores a site in three parts:
 
-- **Found** (40 points): can Google, Bing, ChatGPT search, Claude and Perplexity read it, and do they get the same page people get?
+- **Found** (40 points): can Google (and Gemini), Bing (and Copilot), ChatGPT search, Claude and Perplexity read it, and do they get the same page people get? Plus llms.txt, sitemap, Bing verification, structured data and Open Graph.
 - **Protected** (45 points): what AI attack agents look for first: secret files left public, keys in public scripts, login and signup forms with no bot guard, missing security headers.
 - **Agent-safe** (15 points): text on the page aimed at AI agents, which can hijack the agents your visitors send.
 
@@ -50,3 +50,9 @@ The same API also returns `platform` (WordPress, Shopify, Next.js and so on) and
 The public result says how many sensitive files or script secrets a site has, never which ones, so the check is no help to attackers. Site owners get the details with [Agent Grade Pro](https://simgen.dev/agent-grade/#pricing) after confirming ownership: weekly re-grades, an email when the grade drops, and every page scanned. 7 days free.
 
 Built by [Kyle Clouthier](https://simgen.dev/), Clouthier Simulation Labs. MIT licence.
+
+## The rest of Agent Grade
+
+- **Guard**: decoys that catch attack bots and AI agents on your own site and report them to your account, with every catch sorted as a script, a browser or an AI agent. A free [WordPress plugin](https://simgen.dev/agent-grade/guard/), and a [JavaScript version](https://github.com/KyleClouthier/agent-grade-guard) for Cloudflare Workers, Next.js and Express.
+- **The Agent Attack Index**: public monthly totals of what the decoys see across every Guard site: https://simgen.dev/agent-grade/attack-index/
+- **Plans**: every feature of Free, Pro, Agency and Guard side by side: https://simgen.dev/agent-grade/plans/
