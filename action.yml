@@ -69,10 +69,14 @@ runs:
           ] | .[]' <<<"$resp")
         n=0; [ -n "$ways" ] && n=$(grep -c . <<<"$ways")
 
-        if [ "$capped" -gt 0 ] || [ "$grade" = "D" ] || [ "$grade" = "F" ]; then level=critical
-        elif [ "$grade" = "C" ]; then level=elevated
-        elif [ "$grade" = "B" ]; then level=guarded
-        else level=low; fi
+        # The server's threat level when it sends one (same rules as the website); older answers fall back to the grade.
+        level=$(jq -r '.threat.level // empty' <<<"$resp")
+        if [ -z "$level" ]; then
+          if [ "$capped" -gt 0 ] || [ "$grade" = "D" ] || [ "$grade" = "F" ]; then level=critical
+          elif [ "$grade" = "C" ]; then level=elevated
+          elif [ "$grade" = "B" ]; then level=guarded
+          else level=low; fi
+        fi
         LEVEL=$(tr '[:lower:]' '[:upper:]' <<<"$level")
 
         {
