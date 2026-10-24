@@ -1,35 +1,46 @@
 name: 'AgentDecoy scan'
-description: 'Fail the build when your site is exposed to hostile AI agents: leaked keys and files, open forms, missing headers, hidden agent instructions.'
+description: 'Fail the build when a hostile AI agent has a way into your site: leaked keys and files, unguarded forms, missing locks, hidden agent instructions.'
 author: 'Kyle Clouthier'
 branding:
   icon: 'shield'
-  color: 'yellow'
+  color: 'red'
 inputs:
   site:
-    description: 'The site to grade, for example example.com'
+    description: 'The site to scan, for example example.com'
     required: true
-  min-grade:
-    description: 'Lowest grade that passes: A, B, C, D or F'
+  fail-on:
+    description: 'Threat level that fails the build: critical, elevated or guarded'
     required: false
-    default: 'C'
+    default: 'critical'
+  min-grade:
+    description: 'Older setting, still honoured: lowest defense grade that passes (A to F). Leave empty to use fail-on.'
+    required: false
+    default: ''
   api-key:
-    description: 'Optional AgentDecoy Pro or Agency API key (120 checks an hour instead of 10)'
+    description: 'Optional AgentDecoy Pro or Agency API key (120 scans an hour instead of 10)'
     required: false
     default: ''
 outputs:
-  grade:
-    description: 'The letter grade'
-    value: ${{ steps.grade.outputs.grade }}
+  threat-level:
+    description: 'critical, elevated, guarded or low'
+    value: ${{ steps.scan.outputs.threat-level }}
+  ways-in:
+    description: 'How many ways in a hostile AI agent would find'
+    value: ${{ steps.scan.outputs.ways-in }}
   score:
-    description: 'The score out of 100'
-    value: ${{ steps.grade.outputs.score }}
+    description: 'Defense score out of 100'
+    value: ${{ steps.scan.outputs.score }}
+  grade:
+    description: 'Defense grade letter (kept for older workflows)'
+    value: ${{ steps.scan.outputs.grade }}
 runs:
   using: 'composite'
   steps:
-    - id: grade
+    - id: scan
       shell: bash
       env:
         SITE: ${{ inputs.site }}
+        FAIL_ON: ${{ inputs.fail-on }}
         MIN: ${{ inputs.min-grade }}
         KEY: ${{ inputs.api-key }}
       run: |
@@ -41,31 +52,68 @@ runs:
           resp=$(curl -sS --max-time 90 "$url")
         fi
         err=$(jq -r '.error // empty' <<<"$resp")
-        if [ -n "$err" ]; then echo "::error::AgentDecoy could not check $SITE: $err"; exit 1; fi
+        if [ -n "$err" ]; then echo "::error::AgentDecoy could not scan $SITE: $err"; exit 1; fi
         grade=$(jq -r '.grade' <<<"$resp"); score=$(jq -r '.score' <<<"$resp"); host=$(jq -r '.site' <<<"$resp")
-        found=$(jq -r '.parts.found.points' <<<"$resp"); prot=$(jq -r '.parts.protected.points' <<<"$resp"); safe=$(jq -r '.parts.agentSafe.points' <<<"$resp")
-        echo "grade=$grade" >> "$GITHUB_OUTPUT"; echo "score=$score" >> "$GITHUB_OUTPUT"
+        prot=$(jq -r '.parts.protected.points' <<<"$resp"); safe=$(jq -r '.parts.agentSafe.points' <<<"$resp"); found=$(jq -r '.parts.found.points' <<<"$resp")
+        capped=$(jq -r '(.caps // []) | length' <<<"$resp")
 
-        # Warnings for each thing that costs points, so they show on the run page.
-        jq -r '.parts.found.blockedByRobots[]? | "Blocked in robots.txt: \(.)"' <<<"$resp" | while read -r l; do echo "::warning::$l"; done
-        jq -r '.parts.protected.headers[]? | select(.ok == false) | "Missing header: \(.name)"' <<<"$resp" | while read -r l; do echo "::warning::$l"; done
+        # The ways in, same rules as the result page.
+        ways=$(jq -r '
+          .parts as $p |
+          [ (if ($p.protected.sensitiveFiles // 0) > 0 and ($p.protected.decoySite | not) then "\($p.protected.sensitiveFiles) sensitive file(s) public: attack bots ask every site for these" else empty end),
+            (if ($p.protected.scriptSecrets // 0) > 0 then "A secret sits in your public JavaScript" else empty end),
+            (if ($p.protected.forms // 0) > ($p.protected.formsGuarded // 0) then "\(($p.protected.forms) - ($p.protected.formsGuarded // 0)) login or signup form(s) with no bot guard" else empty end),
+            (if ($p.agentSafe.hidden // 0) > 0 then "Hidden text on your page gives instructions to AI agents" else empty end),
+            ([ $p.protected.headers[]? | select(.ok == false and ((.managed // false) | not)) ] | length) as $m |
+              (if $m > 0 then "\($m) of 5 security headers missing" else empty end)
+          ] | .[]' <<<"$resp")
+        n=0; [ -n "$ways" ] && n=$(grep -c . <<<"$ways")
+
+        if [ "$capped" -gt 0 ] || [ "$grade" = "D" ] || [ "$grade" = "F" ]; then level=critical
+        elif [ "$grade" = "C" ]; then level=elevated
+        elif [ "$grade" = "B" ]; then level=guarded
+        else level=low; fi
+        LEVEL=$(tr '[:lower:]' '[:upper:]' <<<"$level")
+
+        {
+          echo "threat-level=$level"; echo "ways-in=$n"; echo "score=$score"; echo "grade=$grade"
+        } >> "$GITHUB_OUTPUT"
+
+        while read -r l; do [ -n "$l" ] && echo "::warning::Way in: $l"; done <<<"$ways"
         jq -r '.caps[]?' <<<"$resp" | while read -r l; do echo "::error::$l"; done
 
         {
-          echo "## AgentDecoy: $host is $grade ($score/100)"
+          echo "## AgentDecoy: threat level $LEVEL on $host"
           echo ""
-          echo "| Part | Points |"
+          if [ "$n" -gt 0 ]; then
+            echo "**$n way(s) in for a hostile AI agent:**"
+            echo ""
+            while read -r l; do [ -n "$l" ] && echo "- $l"; done <<<"$ways"
+          else
+            echo "No way in found from the outside."
+          fi
+          echo ""
+          echo "| Check | Points |"
           echo "| --- | --- |"
-          echo "| Found by search and AI | $found / 40 |"
           echo "| Protected from attack agents | $prot / 45 |"
           echo "| Safe for visiting AI agents | $safe / 15 |"
+          echo "| Still found by AI search | $found / 40 |"
+          echo "| Defense score | $score / 100 ($grade) |"
           echo ""
-          echo "Full result: https://simgen.dev/agentdecoy/?site=$host"
+          echo "Full threat report and fixes: https://simgen.dev/agentdecoy/?site=$host"
         } >> "$GITHUB_STEP_SUMMARY"
 
-        rank() { case "$1" in A) echo 1;; B) echo 2;; C) echo 3;; D) echo 4;; *) echo 5;; esac; }
-        if [ "$(rank "$grade")" -gt "$(rank "${MIN^^}")" ]; then
-          echo "::error::$host scored $grade ($score/100), below the minimum ${MIN^^}. Details: https://simgen.dev/agentdecoy/?site=$host"
-          exit 1
+        if [ -n "$MIN" ]; then
+          rank() { case "$1" in A) echo 1;; B) echo 2;; C) echo 3;; D) echo 4;; *) echo 5;; esac; }
+          if [ "$(rank "$grade")" -gt "$(rank "${MIN^^}")" ]; then
+            echo "::error::$host defense grade $grade ($score/100) is below the minimum ${MIN^^}. https://simgen.dev/agentdecoy/?site=$host"
+            exit 1
+          fi
+        else
+          lv() { case "$1" in critical) echo 4;; elevated) echo 3;; guarded) echo 2;; *) echo 1;; esac; }
+          if [ "$(lv "$level")" -ge "$(lv "${FAIL_ON,,}")" ]; then
+            echo "::error::Threat level $LEVEL on $host: $n way(s) in for a hostile AI agent. https://simgen.dev/agentdecoy/?site=$host"
+            exit 1
+          fi
         fi
-        echo "$host scored $grade ($score/100), at or above ${MIN^^}."
+        echo "Threat level $LEVEL on $host ($n way(s) in, defense score $score/100)."
