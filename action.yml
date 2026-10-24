@@ -1,5 +1,5 @@
-name: 'Agent Grade check'
-description: 'Fail the build when your site drops below a grade for AI search visibility and AI attack-agent exposure.'
+name: 'AgentDecoy scan'
+description: 'Fail the build when your site is exposed to hostile AI agents: leaked keys and files, open forms, missing headers, hidden agent instructions.'
 author: 'Kyle Clouthier'
 branding:
   icon: 'shield'
@@ -13,7 +13,7 @@ inputs:
     required: false
     default: 'C'
   api-key:
-    description: 'Optional Agent Grade Pro or Agency API key (120 checks an hour instead of 10)'
+    description: 'Optional AgentDecoy Pro or Agency API key (120 checks an hour instead of 10)'
     required: false
     default: ''
 outputs:
@@ -41,7 +41,7 @@ runs:
           resp=$(curl -sS --max-time 90 "$url")
         fi
         err=$(jq -r '.error // empty' <<<"$resp")
-        if [ -n "$err" ]; then echo "::error::Agent Grade could not check $SITE: $err"; exit 1; fi
+        if [ -n "$err" ]; then echo "::error::AgentDecoy could not check $SITE: $err"; exit 1; fi
         grade=$(jq -r '.grade' <<<"$resp"); score=$(jq -r '.score' <<<"$resp"); host=$(jq -r '.site' <<<"$resp")
         found=$(jq -r '.parts.found.points' <<<"$resp"); prot=$(jq -r '.parts.protected.points' <<<"$resp"); safe=$(jq -r '.parts.agentSafe.points' <<<"$resp")
         echo "grade=$grade" >> "$GITHUB_OUTPUT"; echo "score=$score" >> "$GITHUB_OUTPUT"
@@ -52,7 +52,7 @@ runs:
         jq -r '.caps[]?' <<<"$resp" | while read -r l; do echo "::error::$l"; done
 
         {
-          echo "## Agent Grade: $host is $grade ($score/100)"
+          echo "## AgentDecoy: $host is $grade ($score/100)"
           echo ""
           echo "| Part | Points |"
           echo "| --- | --- |"
@@ -60,12 +60,12 @@ runs:
           echo "| Protected from attack agents | $prot / 45 |"
           echo "| Safe for visiting AI agents | $safe / 15 |"
           echo ""
-          echo "Full result: https://simgen.dev/agent-grade/?site=$host"
+          echo "Full result: https://simgen.dev/agentdecoy/?site=$host"
         } >> "$GITHUB_STEP_SUMMARY"
 
         rank() { case "$1" in A) echo 1;; B) echo 2;; C) echo 3;; D) echo 4;; *) echo 5;; esac; }
         if [ "$(rank "$grade")" -gt "$(rank "${MIN^^}")" ]; then
-          echo "::error::$host graded $grade ($score/100), below the minimum ${MIN^^}. Details: https://simgen.dev/agent-grade/?site=$host"
+          echo "::error::$host scored $grade ($score/100), below the minimum ${MIN^^}. Details: https://simgen.dev/agentdecoy/?site=$host"
           exit 1
         fi
-        echo "$host graded $grade ($score/100), at or above ${MIN^^}."
+        echo "$host scored $grade ($score/100), at or above ${MIN^^}."
