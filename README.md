@@ -10,6 +10,11 @@ A GitHub Action that grades your website after each deploy and fails the build i
 
 The check only reads what any visitor can read. It never logs in, submits a form or tries to break anything.
 
+
+## Part of a network
+
+Every site that joins Agent Grade makes every other site safer and smarter. Sites running [Agent Grade Guard](https://simgen.dev/agent-grade/guard/) share what their decoys catch: an address that uses a stolen secret on one site is refused on logins and forms across all of them within the hour, and what the network learns about AI search (which fixes really bring AI crawlers) goes into every grade this Action reads. Public totals: [Agent Attack Index](https://simgen.dev/agent-grade/attack-index/).
+
 ## Use
 
 ```yaml
