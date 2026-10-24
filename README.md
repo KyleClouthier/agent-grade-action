@@ -43,6 +43,8 @@ Run it after your deploy job (`needs: deploy`) so it grades what just went live.
 
 `grade` (the letter) and `score` (out of 100). The run summary shows the three parts and a link to the full result, and each lost point shows as a warning on the run page.
 
+The same API also returns `platform` (WordPress, Shopify, Next.js and so on) and `fixes`, a numbered list of what to change and where to do it on that platform; the full result page shows both.
+
 ## Details and alerts
 
 The public result says how many sensitive files or script secrets a site has, never which ones, so the check is no help to attackers. Site owners get the details with [Agent Grade Pro](https://simgen.dev/agent-grade/#pricing) after confirming ownership: weekly re-grades, an email when the grade drops, and every page scanned. 7 days free.
