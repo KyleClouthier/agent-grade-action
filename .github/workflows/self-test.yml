@@ -40,3 +40,14 @@ jobs:
       - run: |
           if [ "${{ steps.g.outcome }}" != "failure" ]; then echo "expected a failure below A"; exit 1; fi
           echo "min-grade still honoured"
+  repo-check-catches-a-leak:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: A committed .env with an OpenAI key must fail
+        run: |
+          mkdir -p /tmp/leak && cd /tmp/leak && git init -q
+          printf 'OPENAI_API_KEY=sk-proj-%s\n' "$(head -c 64 /dev/urandom | base64 | tr -dc A-Za-z0-9 | head -c 40)" > .env
+          git add .env
+          if GITHUB_WORKSPACE=/tmp/leak FAIL=true bash "${{ github.workspace }}/repo-check.sh"; then echo "expected the repo check to fail"; exit 1; fi
+          echo "Correctly caught the committed key"
