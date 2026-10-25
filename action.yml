@@ -48,7 +48,7 @@ runs:
         KEY: ${{ inputs.api-key }}
       run: |
         set -euo pipefail
-        url="https://simgen.dev/api/agent-grade?site=$(jq -rn --arg s "$SITE" '$s|@uri')"
+        url="https://simgen.dev/api/agent-grade?src=github-action&site=$(jq -rn --arg s "$SITE" '$s|@uri')"
         if [ -n "$KEY" ]; then
           resp=$(curl -sS --max-time 120 -H "x-agent-grade-key: $KEY" "$url")
         else
