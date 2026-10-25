@@ -1,35 +1,31 @@
 # AgentDecoy scan
 
-**Hackers now send AI agents to break into websites.** This Action scans your site after every deploy the way one of those agents would, and fails the build the moment it finds a way in.
+**Security for the AI-agent era, in your deploy pipeline.** This Action scans your site or app after every deploy the way a hostile AI agent would, and fails the build when it finds something the agent could steal, abuse or be told to do.
 
 ![AgentDecoy: scan, catch, identify, shut out](docs/agentdecoy-how-it-works.png)
 
-An AI attack agent does not get tired. It asks thousands of sites for the same files (`.env`, `.git/config`, `backup.zip`), copies any key it finds, tries it, and keeps going while its owner sleeps. On October 24, 2026 one took a decoy AWS key from our own site and used it to try for admin rights 2 hours 39 minutes later.
+An AI attack agent does not get tired. It asks thousands of sites for the same files (`.env`, `.git/config`, and now `.cursor/mcp.json` and `.mcp.json`), copies any key it finds, connects to any MCP or AI server that answers, and keeps going while its owner sleeps. On October 24, 2026 one took a decoy AWS key from our own site and used it to try for admin rights 2 hours 39 minutes later.
 
-One careless deploy is all it takes: a debug file left public, a key pasted into a script, a new signup form with no bot guard. This Action catches that before an agent does.
+AI-built apps make this easy for them. One prompt can put a key in the browser, deploy the coding tool's config with the site, or ship source maps that hand over every prompt. This Action catches that before an agent does.
 
-## What it reports
+## What it checks
 
-Every run ends with a **threat level** and the **ways in** it found.
+17 AI-era checks, in three groups. It does not check traditional items such as security headers or TLS: other tools cover those well.
+
+| Group | Checks |
+| --- | --- |
+| **Steal** | Secret files left public (.env, .git, cloud keys, backups), keys in page code (17 formats, AI keys and the Supabase service_role key included), AI coding-tool configs (.cursor/mcp.json, .mcp.json, .vscode/mcp.json, .claude/settings.json), source maps, system prompts in page code, AI rule files (CLAUDE.md, AGENTS.md, .cursorrules) |
+| **Abuse** | MCP servers answering without sign-in, self-hosted AI servers with no key (Ollama, OpenAI-compatible), AI called from the browser or open AI routes, unguarded login and sign-up forms, open API docs with write actions, dev servers in production, Supabase or Firebase keys in the page |
+| **Trick** | Hidden or invisible instructions aimed at AI agents (hidden elements, HTML comments, Unicode tag characters), A2A agent cards, robots.txt lines that map private paths |
 
 | Threat level | Means |
 | --- | --- |
-| **Critical** | A secret file is public, a key sits in your JavaScript, or hidden text is giving orders to AI agents. Fix today. |
-| **Elevated** | Agents can work your forms or your missing locks. |
-| **Guarded** | Small gaps left. |
-| **Low** | No way in found from the outside. |
+| **Critical** | Something an agent can take or use right now: a leaked key or file, an AI tool config, an open MCP or AI server, hidden orders for AI agents. Fix today. |
+| **Elevated** | Something an agent can abuse or learn from: open forms, AI routes, source maps, a system prompt, open API docs, a dev server. |
+| **Guarded** | Notes worth a look, such as a database key whose rules decide what is readable. |
+| **Low** | Nothing found from the outside. |
 
-This is the same scan as the free one at [simgen.dev/agentdecoy](https://simgen.dev/agentdecoy/). Here is a real result from one of my own sites:
-
-<img src="docs/scan-result.png" alt="AgentDecoy scan result: threat level Elevated, 2 ways in for a hostile AI agent" width="560">
-
-What it checks:
-
-- **Protected from attack agents**: secret files left public, keys in public scripts, login and signup forms with no bot guard, and the five security headers that stop clickjacking, script injection and downgrade attacks.
-- **Safe for visiting AI agents**: hidden text on your pages aimed at AI agents, which can hijack the agents your own visitors send.
-- **Still found by AI search**: Google, Bing, ChatGPT, Claude and Perplexity can still read you. Protection here never costs you search traffic.
-
-The scan only reads what any visitor can read. It never logs in, submits a form or tries to break anything.
+This is the same scan as the free one at [simgen.dev/agentdecoy](https://simgen.dev/agentdecoy/). It only reads what any visitor can read: it never logs in, submits a form, calls an MCP tool or a model, or reads a database row.
 
 ## Use
 
@@ -44,7 +40,7 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: KyleClouthier/agentdecoy-action@v2
+      - uses: KyleClouthier/agentdecoy-action@v3
         with:
           site: example.com
           fail-on: elevated
@@ -66,24 +62,25 @@ Run it after your deploy job (`needs: deploy`) so it scans what just went live.
 | Output | What it holds |
 | --- | --- |
 | `threat-level` | `critical`, `elevated`, `guarded` or `low` |
-| `ways-in` | How many ways in a hostile AI agent would find |
+| `ways-in` | How many critical and elevated findings |
+| `findings` | The finding ids, comma separated, for example `script_secrets,open_mcp` |
 | `score` | Defense score out of 100 |
 | `grade` | Defense grade letter, kept for older workflows |
 
-Each way in shows as a warning on the run page, and the run summary lists them with a link to the full threat report and its fixes.
+Critical findings show as errors on the run page, elevated ones as warnings, and the run summary lists them all with a link to the full report and its fixes.
 
 ## Scanning finds the holes. Decoys catch who comes through them.
 
-A scan tells you what an agent *would* find. [AgentDecoy Guard](https://simgen.dev/agentdecoy/guard/) tells you who is actually trying, as it happens:
+A scan tells you what an agent *would* find. [AgentDecoy](https://simgen.dev/agentdecoy/guard/) tells you who is actually trying, as it happens:
 
-- **Catch.** Decoy keys, files, logins, API docs and an MCP server that look real and report back the moment anyone takes or uses them.
+- **Catch.** Decoy keys, files, AI tool configs, logins, API docs, an MCP server and AI agent panels that look real and report back the moment anyone takes or uses them.
 - **Identify.** Every catch is labelled a script, a person or an AI agent (response timing, verified Web Bot Auth signatures, how the fake login was filled), with how far it got and whose network it came from.
 - **Shut out.** An address caught using a stolen secret on one protected site is refused on logins and forms across every protected site within the hour. Every site that joins makes every other site safer.
 
-Guard is free: a [WordPress plugin](https://simgen.dev/agentdecoy/guard/), and the npm package [`agentdecoy`](https://github.com/KyleClouthier/agentdecoy) for Cloudflare Workers, Next.js and Express. Public totals: the [Agent Attack Index](https://simgen.dev/agentdecoy/attack-index/).
+Free installs: `npm install agentdecoy` then `npx agentdecoy init` for Next.js, Vercel, Netlify, Firebase and Express ([source](https://github.com/KyleClouthier/agentdecoy)), a [WordPress plugin](https://simgen.dev/agentdecoy/guard/), and a Cloudflare Worker for closed builders. Public totals: the [Agent Attack Index](https://simgen.dev/agentdecoy/attack-index/).
 
-## Details and alerts
+## Details for the owner
 
-The public result says how many sensitive files or script secrets a site has, never which ones, so the scan is no help to attackers. Site owners get the details with [AgentDecoy Pro](https://simgen.dev/agentdecoy/#pricing) after proving ownership: a threat report every Monday, an email the day a new way in opens, early warning when an attacker from the network turns up, and every page scanned. 7 days free. Rather have it fixed for you? Each way in has a fixed starting price on the result page.
+The public result says what kind of thing was found and how many, never which file, key, tool or route, so the scan is no help to attackers. Install AgentDecoy on the site and the install proves it is yours: your dashboard then runs a free deep scan with every detail, up to 30 pages, and a count of which database tables a signed-out visitor can read (counts only, never rows). [Pro](https://simgen.dev/agentdecoy/#pricing) runs it every Monday and emails you the day a new way in opens. 7 days free.
 
 Built by [Kyle Clouthier](https://simgen.dev/), Clouthier Simulation Labs. MIT licence.

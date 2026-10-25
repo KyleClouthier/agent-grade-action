@@ -1,5 +1,5 @@
 name: 'AgentDecoy scan'
-description: 'Fail the build when a hostile AI agent has a way into your site: leaked keys and files, unguarded forms, missing locks, hidden agent instructions.'
+description: 'Fail the build when a hostile AI agent can steal, abuse or trick your site: leaked keys, AI tool configs, open MCP or AI servers, hidden prompts.'
 author: 'Kyle Clouthier'
 branding:
   icon: 'shield'
@@ -25,8 +25,11 @@ outputs:
     description: 'critical, elevated, guarded or low'
     value: ${{ steps.scan.outputs.threat-level }}
   ways-in:
-    description: 'How many ways in a hostile AI agent would find'
+    description: 'How many ways in a hostile AI agent would find (critical and elevated findings)'
     value: ${{ steps.scan.outputs.ways-in }}
+  findings:
+    description: 'The finding ids, comma separated (for example script_secrets,open_mcp)'
+    value: ${{ steps.scan.outputs.findings }}
   score:
     description: 'Defense score out of 100'
     value: ${{ steps.scan.outputs.score }}
@@ -47,64 +50,44 @@ runs:
         set -euo pipefail
         url="https://simgen.dev/api/agent-grade?site=$(jq -rn --arg s "$SITE" '$s|@uri')"
         if [ -n "$KEY" ]; then
-          resp=$(curl -sS --max-time 90 -H "x-agent-grade-key: $KEY" "$url")
+          resp=$(curl -sS --max-time 120 -H "x-agent-grade-key: $KEY" "$url")
         else
-          resp=$(curl -sS --max-time 90 "$url")
+          resp=$(curl -sS --max-time 120 "$url")
         fi
         err=$(jq -r '.error // empty' <<<"$resp")
         if [ -n "$err" ]; then echo "::error::AgentDecoy could not scan $SITE: $err"; exit 1; fi
         grade=$(jq -r '.grade' <<<"$resp"); score=$(jq -r '.score' <<<"$resp"); host=$(jq -r '.site' <<<"$resp")
-        prot=$(jq -r '.parts.protected.points' <<<"$resp"); safe=$(jq -r '.parts.agentSafe.points' <<<"$resp"); found=$(jq -r '.parts.found.points' <<<"$resp")
-        capped=$(jq -r '(.caps // []) | length' <<<"$resp")
-
-        # The ways in, same rules as the result page.
-        ways=$(jq -r '
-          .parts as $p |
-          [ (if ($p.protected.sensitiveFiles // 0) > 0 and ($p.protected.decoySite | not) then "Critical: \($p.protected.sensitiveFiles) file(s) holding sensitive settings are public, confirmed real (which file: owner only)" else empty end),
-            (if ($p.protected.scriptSecrets // 0) > 0 then "Critical: a secret key is in the public JavaScript (which key: owner only)" else empty end),
-            (if ($p.protected.forms // 0) > ($p.protected.formsGuarded // 0) then "\(($p.protected.forms) - ($p.protected.formsGuarded // 0)) login or signup form(s) with no bot guard" else empty end),
-            (if ($p.agentSafe.hidden // 0) > 0 then "Hidden text on your page gives instructions to AI agents" else empty end),
-            ([ $p.protected.headers[]? | select(.ok == false and ((.managed // false) | not)) ] | length) as $m |
-              (if $m > 0 then "\($m) of 5 security headers missing" else empty end)
-          ] | .[]' <<<"$resp")
-        n=0; [ -n "$ways" ] && n=$(grep -c . <<<"$ways")
-
-        # The server's threat level when it sends one (same rules as the website); older answers fall back to the grade.
-        level=$(jq -r '.threat.level // empty' <<<"$resp")
-        if [ -z "$level" ]; then
-          if [ "$capped" -gt 0 ] || [ "$grade" = "D" ] || [ "$grade" = "F" ]; then level=critical
-          elif [ "$grade" = "C" ]; then level=elevated
-          elif [ "$grade" = "B" ]; then level=guarded
-          else level=low; fi
-        fi
+        level=$(jq -r '.threat.level // "low"' <<<"$resp")
         LEVEL=$(tr '[:lower:]' '[:upper:]' <<<"$level")
 
+        # Every finding, worst first: "LEVEL: title". Kinds and counts only; which file or key goes to the verified owner.
+        lines=$(jq -r '[.findings // [] | .[] | {o: ({"critical":0,"elevated":1,"guarded":2}[.level]), l: .level, t: .title}] | sort_by(.o) | .[] | "\(.l | ascii_upcase): \(.t)"' <<<"$resp")
+        n=$(jq -r '[.findings // [] | .[] | select(.level != "guarded")] | length' <<<"$resp")
+        ids=$(jq -r '[.findings // [] | .[].id] | join(",")' <<<"$resp")
+
         {
-          echo "threat-level=$level"; echo "ways-in=$n"; echo "score=$score"; echo "grade=$grade"
+          echo "threat-level=$level"; echo "ways-in=$n"; echo "findings=$ids"; echo "score=$score"; echo "grade=$grade"
         } >> "$GITHUB_OUTPUT"
 
-        while read -r l; do [ -n "$l" ] && echo "::warning::Way in: $l"; done <<<"$ways"
-        jq -r '.caps[]?' <<<"$resp" | while read -r l; do echo "::error::$l"; done
+        while read -r l; do
+          [ -z "$l" ] && continue
+          case "$l" in CRITICAL:*) echo "::error::$l";; ELEVATED:*) echo "::warning::$l";; *) echo "::notice::$l";; esac
+        done <<<"$lines"
 
         {
           echo "## AgentDecoy: threat level $LEVEL on $host"
           echo ""
-          if [ "$n" -gt 0 ]; then
-            echo "**$n way(s) in for a hostile AI agent:**"
+          if [ -n "$lines" ]; then
+            echo "**What a hostile AI agent could steal, abuse or trick:**"
             echo ""
-            while read -r l; do [ -n "$l" ] && echo "- $l"; done <<<"$ways"
+            while read -r l; do [ -n "$l" ] && echo "- $l"; done <<<"$lines"
           else
-            echo "No way in found from the outside."
+            echo "No AI-era way in found from the outside."
           fi
           echo ""
-          echo "| Check | Points |"
-          echo "| --- | --- |"
-          echo "| Protected from attack agents | $prot / 45 |"
-          echo "| Safe for visiting AI agents | $safe / 15 |"
-          echo "| Still found by AI search | $found / 40 |"
-          echo "| Defense score | $score / 100 ($grade) |"
+          echo "Defense score $score/100 ($grade). Full report and fixes: https://simgen.dev/agentdecoy/?site=$host"
           echo ""
-          echo "Full threat report and fixes: https://simgen.dev/agentdecoy/?site=$host"
+          echo "Which file, key, tool or route: install AgentDecoy free on the site and open the deep scan in your dashboard."
         } >> "$GITHUB_STEP_SUMMARY"
 
         if [ -n "$MIN" ]; then
