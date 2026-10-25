@@ -20,12 +20,13 @@ jobs:
         uses: ./
         continue-on-error: true
         with:
-          site: calltheupload.com
+          site: agentdecoy-fixture.web.app
           fail-on: elevated
       - name: The scan must have failed
         run: |
           if [ "${{ steps.g.outcome }}" != "failure" ]; then echo "expected a failure at elevated"; exit 1; fi
-          echo "Correctly failed: calltheupload.com is ${{ steps.g.outputs.threat-level }} with ${{ steps.g.outputs.ways-in }} ways in"
+          echo "Correctly failed: the fixture is ${{ steps.g.outputs.threat-level }} with ${{ steps.g.outputs.ways-in }} ways in"
+          case ",${{ steps.g.outputs.findings }}," in *,hidden_text,*) ;; *) echo "expected hidden_text in findings: ${{ steps.g.outputs.findings }}"; exit 1;; esac
   old-min-grade-still-works:
     runs-on: ubuntu-latest
     steps:
@@ -34,7 +35,7 @@ jobs:
         uses: ./
         continue-on-error: true
         with:
-          site: calltheupload.com
+          site: agentdecoy-fixture.web.app
           min-grade: A
       - run: |
           if [ "${{ steps.g.outcome }}" != "failure" ]; then echo "expected a failure below A"; exit 1; fi
