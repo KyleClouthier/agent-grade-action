@@ -1,5 +1,5 @@
 name: 'AgentDecoy scan'
-description: 'Fail the build when a hostile AI agent can steal, abuse or trick your site: leaked keys, AI tool configs, open MCP or AI servers, hidden prompts.'
+description: 'Fail the build when a hostile AI agent can steal or abuse your site: leaked keys, AI configs, open MCP or AI servers.'
 author: 'Kyle Clouthier'
 branding:
   icon: 'shield'
