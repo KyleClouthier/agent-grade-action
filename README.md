@@ -1,3 +1,5 @@
+<img src="https://simgen.dev/agentdecoy/logo.svg" width="72" height="72" alt="AgentDecoy logo">
+
 # AgentDecoy scan
 
 [![Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-AgentDecoy%20scan-d4a017?logo=github)](https://github.com/marketplace/actions/agentdecoy-scan) [![release](https://img.shields.io/github/v/release/KyleClouthier/agentdecoy-action?color=d4a017)](https://github.com/KyleClouthier/agentdecoy-action/releases) [![self-test](https://github.com/KyleClouthier/agentdecoy-action/actions/workflows/self-test.yml/badge.svg)](https://github.com/KyleClouthier/agentdecoy-action/actions/workflows/self-test.yml) [![leak clock](https://img.shields.io/badge/leaked%20AI%20key%20used%20in-3%20seconds-red)](https://simgen.dev/agentdecoy/leak-clock/)
